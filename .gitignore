@@ -1,0 +1,11 @@
+/bin/
+target/
+test-output/
+
+.DS_STORE
+*.local
+*.log
+*.class
+*.xls
+*.png
+
