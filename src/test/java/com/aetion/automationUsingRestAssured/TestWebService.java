@@ -1,18 +1,6 @@
 package com.aetion.automationUsingRestAssured;
 
-
-import static io.restassured.RestAssured.given;
-
-import static io.restassured.path.json.JsonPath.with;
-import static io.restassured.matcher.RestAssuredMatchers.*;
-import static org.hamcrest.Matchers.notNullValue;
-import io.restassured.RestAssured;
-import io.restassured.parsing.Parser;
-import io.restassured.response.Response;
-
-
 import static org.junit.Assert.*; 
-
 import org.junit.Test; 
 import org.junit.BeforeClass;
 import org.junit.Ignore;
@@ -49,26 +37,22 @@ public class TestWebService {
     }
 	
 
-    @Ignore("skip")
+    @Test
     public void testLogin() throws Exception
     {
         System.out.println("test method:" +  name.getMethodName() );
         client.login();
-       
-        //Really need to do this?
-       
          System.out.println(name.getMethodName() + " is Done.");
-            
     }
 
 	
 	    
-    @Ignore("skip")
+    @Test
     public void testLogin_badCredential() throws Exception
     {
         System.out.println("test method:" +  name.getMethodName() );
         try{
-        	client.login("what", "ever");
+        	client.loginWithBadCredential();
          }catch(Exception e)
          {
              handleException(e);
@@ -115,7 +99,7 @@ public class TestWebService {
     {
         System.out.println("test method:" +  name.getMethodName() );
         try{
-        	ServiceClient.getUser(2);
+        	client.getUsers();
          }catch(Exception e)
          {
              handleException(e);
@@ -151,7 +135,7 @@ public class TestWebService {
     private void handleException(Exception e)
     {   
         e.printStackTrace();
-        fail("Exception is thrown.");
+        client.getErrors().append(e.getMessage());
         
     }
 

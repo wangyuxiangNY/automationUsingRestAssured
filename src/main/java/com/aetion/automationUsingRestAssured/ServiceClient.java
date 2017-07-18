@@ -10,17 +10,16 @@ import java.util.List;
 import java.util.Map;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.io.FileReader;
 import java.util.StringTokenizer;
 
-import static org.junit.Assert.assertTrue;
 
 public class ServiceClient {
 
 	private static final String BASE_URI = "http://qa-takehome.dev.aetion.com:4440";
 	private static final String SERVICE_URL_LOGIN = "/login";
 	private static final String SERVICE_URL_USER = "/user/";
-	//private static final String SERVICE_URL_GET_USER = "/user/{id}";
 	private static final String SERVICE_URL_SEARCH_USER = "/user/search";
 	
     private static final String  USER_NAME = "mwang";
@@ -31,7 +30,7 @@ public class ServiceClient {
 	//For faster search, Map user's email as key in the hashMap
 	Map<String, User> userList;
 	
-	//hold all the error messages 
+	//hold all the verification error messages 
 	public static StringBuffer errors = new StringBuffer(); 
 	  
 	
@@ -47,10 +46,23 @@ public class ServiceClient {
     	login(USER_NAME, PASSWORD);
     }
     	
+    public  void loginWithBadCredential() throws Exception
+    {   
+    	String bad_user = "what";
+    	String bad_password ="ever";
+		String json = "{\"username\":\"" + bad_user + "\",\"password\":\""  + bad_password + "\"} ";
+
+		System.out.println("see json:" + json);
+		
+        given()
+    	.contentType("application/json").
+    	body(json).
+        when().
+        post(BASE_URI+ SERVICE_URL_LOGIN).then().statusCode(401);
+    }    
+    
     public  void login(String userName, String password) throws Exception
     {
-    	
-		
 		String json = "{\"username\":\"" + userName + "\",\"password\":\""  + password + "\"} ";
 
 		System.out.println("see json:" + json);
@@ -67,7 +79,15 @@ public class ServiceClient {
 		      
     }    
     	
-    public  void createUsers(String userFile)
+    /*
+     * create users from the data file as following: 
+     * 1. Read in data file and parse each line
+     * 2. Send POST reqeust to create user, and put response in userList for late verification
+     * 3. Verify the created users with the original data, to make sure data are not corrupted. 
+     * 
+     * @param userFile the plain .txt file holding all the data info
+     */
+    public  void createUsers(String userFile) throws Exception
     {   //First, get all user data
     	System.out.println("about to read user data from the file");
     	
@@ -80,47 +100,42 @@ public class ServiceClient {
     		String jsonBody = "{\"email\":\""+ user.getEmail() + "\",\"first_name\":\"" + user.getFirst_name() 
  			+ "\", \"last_name\":\"" + user.getLast_name() + "\",\"age\":\" " + user.getAge() + "\"} ";
 
-    		User response = 
+    		User createdUser = 
 	    	given().
 	    	header("X-Auth-Token", authToken).
 	    	header("content-type", "application/json").
 	    	body(jsonBody).
-	    	log().all().
+	    	//log().all().
 	    	when().
 	    	post(BASE_URI+ SERVICE_URL_USER).as(User.class);
 	    	
-    		userList.put(user.getEmail(), response);
+
     		
-	    	System.out.println("Verifying details for userID:" + response.getId());
+    		userList.put(user.getEmail(), createdUser);
+    		
+	    	System.out.println("Verifying details for userID:" + createdUser.getId());
 	    	//Verify that ID is set and is bigger than 0,
-    	    assertTrue(response.getId() > 0);
+    	    if (createdUser.getId() < 0)
+    	    	errors.append("Generated ID is not positive.");
     	    
-    	    //verif user data is still good.
-    	    assertTrue(response.getEmail().equals(user.getEmail()));
-    	    assertTrue(response.getFirst_name().equals(user.getFirst_name()));
-    	    assertTrue(response.getLast_name().equals(user.getLast_name()));
-    	    assertTrue(response.getAge() == user.getAge());
+    	    verifyUserDetailsExceptID(user, createdUser);
     			
     	}	
     }
     
-    private static void verifyUserDetails(User actual, User expected)
+    
+    private void verifyUserID(User actual, User expected)
     {
     	//Verify that ID is set and is bigger than 0,
-    	
-    	/*
-	    assertTrue(actual.getId() > 0);
-	    
-	    //verif user data is still good.
-	    assertTrue(actual.getEmail().equals(expected.getEmail()));
-	    assertTrue(actual.getFirst_name().equals(expected.getFirst_name()));
-	    assertTrue(actual.getLast_name().equals(expected.getLast_name()));
-	    assertTrue(actual.getAge() == expected.getAge());
-	    */
-    	
-       if (actual.getId() < 1) errors.append("ID is not correct.");
-	    
-	    //verif user data is still good.
+        if (actual.getId() < 1) errors.append("ID is not correct.");
+ 	    
+ 	    //verif user ID is not altered.
+        if(actual.getId()!= expected.getId())
+ 	    	errors.append("ID doesn't match.");
+    }
+    
+    private static void verifyUserDetailsExceptID(User actual, User expected)
+    {
 	    if(!actual.getEmail().equals(expected.getEmail()))
 	    	errors.append("email is not right.");
 	    if(!actual.getFirst_name().equals(expected.getFirst_name()))
@@ -131,34 +146,49 @@ public class ServiceClient {
 	    	errors.append("age is not right.");;
     }
     
-    public static void getUser(int userID)
+    /*
+     * Get users in the userList one by one and verify each users details to make sure that they matches.
+     */
+    public void getUsers()
+    {
+    	User originalUser, retrievedUser;
+    	Iterator iterator = userList.entrySet().iterator();
+    	while (iterator.hasNext())
+    	{   
+            Map.Entry pair = (Map.Entry)iterator.next();
+    		originalUser = (User)pair.getValue();
+    		retrievedUser = getUser(originalUser.getId());
+    		verifyUserID(originalUser, retrievedUser);
+    		verifyUserDetailsExceptID(originalUser, retrievedUser);
+    	}
+    }
+    private  User getUser(int userID)
     {   
+    	 User retrievedUser = 	given().
+    	 header("X-Auth-Token", authToken).
+    	 header("content-type", "application/json").
+    	 log().all().
+    	 when().
+    	 get(BASE_URI+ SERVICE_URL_USER + userID).as(User.class);
+    	 
+    	 System.out.println("see retrieved user:" + retrievedUser.toString());
     	
-    	/*
-    	User response = 
-    	    	given().
-    	    	header("X-Auth-Token", authToken).
-    	    	header("content-type", "application/json").
-    	    	log().all().
-    	    	when().
-    	    	get(BASE_URI+ SERVICE_URL_USER + userID).as(User.class);
-        	
-    	  assertTrue(response.getId() == userID);  
-    	  */
+    	 return retrievedUser;
     	
-    	    String response = 	given().
-    	    	header("X-Auth-Token", authToken).
-    	    	header("content-type", "application/json").
-    	    	log().all().
-    	    	when().
-    	    	get(BASE_URI+ SERVICE_URL_USER + userID).getBody().asString();
-    	    System.out.println("See getUser response:" + response);
+    	
     }
     
+    /* Send PUT request to modify those users' corresponded info. 
+     * To modify a user's info, we first need to find out its ID based  its email. Thus the HashMap<String, User> userList
+     * Steps: 
+     * 1. Read in data from the file
+     * 2. parse each line, trace out user ID based on email, and replace the old value with new
+     * 3. Send PUT request over with new value for modification
+     * 4. Verify the result by comparing the data returned in response with the expected value
+     * 
+     * @param usersToModifyFile: plain txt file holidng '3 Users to correct' info 
+     */
     
-   
-    
-    //to modify, first need to find out the corresponding id for put request, then replace the field to modify
     public  void modifyUser(String usersToModifyFile)
     {   
     	BufferedReader br = null;
@@ -191,10 +221,13 @@ public class ServiceClient {
     	        	      itemToChange = st.nextToken().trim();
     	        	      oldValue = st.nextToken().trim();
     	        	      newValue = st.nextToken().trim();
+    	        	      System.out.println("old/new:" + oldValue + "/" + newValue);
     	        	 }
     	        	 
     	        	 //Now trace out userID and go modify
     	        	 User userToModify = userList.get(email);
+    	        	 if (userToModify == null)
+    	        		 System.out.println("userToModify is null.");
     	        	 switch (itemToChange) {
 	    	             case "first_name":
 	    	                 userToModify.setFirst_name(newValue);
@@ -212,6 +245,8 @@ public class ServiceClient {
 	    	                 throw new IllegalArgumentException("Invalid field name: " + itemToChange);
     	             }
     	       
+    	        	 System.out.println("MAKE SURE: " +  userToModify.getAge() );
+    	        	 
     	        	 modifyUser(userToModify.getId(), userToModify);
     	        }
     	    }
@@ -228,7 +263,6 @@ public class ServiceClient {
     		}
     	}
     	
-    	
     }
     
   
@@ -239,7 +273,6 @@ public class ServiceClient {
        
     	System.out.println("modifyUser().. see json:" + jsonString);
     	
-    
 		User response = 
 		given().
 		header("X-Auth-Token", authToken).
@@ -249,13 +282,30 @@ public class ServiceClient {
 		when().
 		put(BASE_URI+ SERVICE_URL_USER + userID).as(User.class);
 		
-		verifyUserDetails(response, newData);
+		verifyUserID(response, newData);
+		verifyUpdate(response, newData);
 		
     }
     	
+    private static void verifyUpdate(User actual, User expected)
+    {
+	    if(!actual.getEmail().equals(expected.getEmail()))
+	    	errors.append("email is not updated.");
+	    if(!actual.getFirst_name().equals(expected.getFirst_name()))
+	    	errors.append("first_name is not updated.");;
+	    if(!actual.getLast_name().equals(expected.getLast_name()))
+	    	errors.append("last_name is not updated.");;
+	    if(actual.getAge() != expected.getAge())
+	    	errors.append("age is not updated.");;
+    }
     
-    
-    public  void search(int startAge, int endAge)
+    /* Search users whose age falls within the specified range
+     *
+     * @param startAge
+     * @param endAge
+     * @return qualified users
+     */
+    public  User[] search(int startAge, int endAge)
     {   
         String jsonString = "{\"start_age\":" + startAge + "," +  "\"end_age\":" + endAge + "}";
 	    System.out.println("See jsonString:" + jsonString);
@@ -271,7 +321,12 @@ public class ServiceClient {
 	    
 	    //List out users returned
 	    for (User user: response)
-	    	System.out.println(user.toString());
+	    {	System.out.println("Search result:" +  user.toString());
+	        //Verify retrieved result is right
+	    	if (user.getAge()> 45 || user.getAge()<35)
+	    		errors.append("Search result is not right.");
+	    }
+	    return response;
     }
     
     

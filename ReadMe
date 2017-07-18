@@ -1,0 +1,23 @@
+To run the test case:  
+   mvn clean test 
+or simply run TestWebService.java from eclipse as junit test
+
+To generate report, run the following 2 commands:
+    mvn surefire-report:report-only
+    mvn site -DgenerateReports=false
+The report will be put here: target/site/surefire-report.html
+Just so that you have a glimpse of report, I put a screenshot of it here(reportScreenshot.jpg).
+
+Something worth pointing out:
+1. Need JAVA 8 in order to run this
+2. Framework/Language used: Junit, RestAssured
+3. The code implements Verify instead of Assert, so that the test can continue running, to find all the errors along the way, till a fatal error is found.  
+4. Logging: To save time, I used the most primitive System.out.print.. together with the log().all() from RestAssured.  
+
+Bugs found:
+
+Bugs found:
+1. Update user(PUT request): Age is not updated
+2. Duplicate users(Users with same email/age/first_name/last_name, but only with different ID) are created with no complain.
+   But since spec doesn't spell out this rule explicitly, I didn't do dup check in the code. But you can see the dup in the log if you run the case more than one time.
+   

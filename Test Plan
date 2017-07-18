@@ -1,0 +1,19 @@
+Test cases: 
+
+For Login:
+1. Verify that user can login service fine with legitimate credential
+2. Verify that user cannot log into the service using bad credentials
+
+For Creating/querying/updating Users
+3. Verify that creating user works fine
+4. Verify that querying user by ID works fine
+5. Verify that updating existing user works fine
+6. Verfiy that search by Age range returns right result
+
+
+Bugs found:
+1. Update user(PUT request): Age is not updated
+2. Duplicate users(Users with same email/age/first_name/last_name, but only with different ID) are created with no complain.
+   But since spec doesn't spell out this rule explicitly, I didn't do dup check in the code. But you can see the dup in the log if you run the case more than one time.
+   
+
